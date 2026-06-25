@@ -39,7 +39,7 @@
   .hud-item span { color: #f4d03f; }
   #game-container {
     position: relative;
-    width: 600px;
+    width: 900px;
     height: 600px;
   }
   canvas {
@@ -152,7 +152,7 @@
     background: rgba(0,0,0,0.5);
     border-radius: 12px;
     padding: 8px 16px;
-    width: 600px;
+    width: 900px;
     max-height: 80px;
     overflow-y: auto;
     font-size: 0.82em;
@@ -225,7 +225,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.0</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.1</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -374,11 +374,12 @@ scene.background=new THREE.Color(0x1a0900);
 scene.fog=new THREE.Fog(0x1a0900,600,2000);
 
 const camera=new THREE.PerspectiveCamera(50,1,1,3000);
-camera.position.set(0,350,380);
+camera.position.set(0,350,480);
 camera.lookAt(new THREE.Vector3(0,0,-20));
+camera.aspect=1.5;camera.updateProjectionMatrix();
 
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setSize(600,600);
+renderer.setSize(900,600);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
@@ -560,7 +561,7 @@ const raycaster=new THREE.Raycaster();
 const _floorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function getFloorPoint(clientX,clientY){
   const rect=canvas.getBoundingClientRect();
-  const mx=((clientX-rect.left)/600)*2-1;
+  const mx=((clientX-rect.left)/900)*2-1;
   const my=-((clientY-rect.top)/600)*2+1;
   raycaster.setFromCamera(new THREE.Vector2(mx,my),camera);
   const tgt=new THREE.Vector3();
@@ -570,7 +571,7 @@ function getFloorPoint(clientX,clientY){
 function project2D(gx,gy){
   const v=new THREE.Vector3(gx-CX,0,gy-CY);
   v.project(camera);
-  return{x:(v.x+1)/2*600,y:(-v.y+1)/2*600};
+  return{x:(v.x+1)/2*900,y:(-v.y+1)/2*600};
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
