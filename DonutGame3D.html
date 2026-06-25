@@ -225,7 +225,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.1</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.2</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -310,9 +310,9 @@ const DonutAudio = (() => {
   function scheduleBossLoop(startT){if(!bossMusicPlaying)return;const dur=scheduleTrack(BOSS_MEL,'sawtooth',0.45,musicGain,startT);scheduleTrack(BOSS_BAS,'sawtooth',0.55,musicGain,startT);scheduleBossDrums(startT,5);bossLoopTimer=setTimeout(()=>scheduleBossLoop(startT+dur),(dur-0.5)*1000);}
   return{
     init,resume(){if(ctx&&ctx.state==='suspended')ctx.resume();},
-    startMusic(){init();if(musicPlaying)return;if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}bossMusicPlaying=false;musicPlaying=true;scheduleLoop(ctx.currentTime+0.1);},
-    startBossMusic(){init();if(bossMusicPlaying)return;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}musicPlaying=false;bossMusicPlaying=true;scheduleBossLoop(ctx.currentTime+0.1);},
-    stopMusic(){musicPlaying=false;bossMusicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}},
+    startMusic(){init();if(musicPlaying)return;if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}bossMusicPlaying=false;musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.28,ctx.currentTime);musicPlaying=true;scheduleLoop(ctx.currentTime+0.1);},
+    startBossMusic(){init();if(bossMusicPlaying)return;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}musicPlaying=false;musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.28,ctx.currentTime);bossMusicPlaying=true;scheduleBossLoop(ctx.currentTime+0.1);},
+    stopMusic(){musicPlaying=false;bossMusicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}if(ctx){musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.001,ctx.currentTime);}},
     toggleMute(){init();muted=!muted;masterGain.gain.setTargetAtTime(muted?0:0.55,ctx.currentTime,0.05);return muted;},
     sfxCoin(){init();const t=ctx.currentTime;[784,988,1319].forEach((f,i)=>playNote(f,'square',t+i*0.06,0.09,0.2,sfxGain));},
     sfxBuy(){init();const t=ctx.currentTime;playNote(392,'sine',t,0.07,0.38,sfxGain);playNote(523,'sine',t+0.07,0.07,0.38,sfxGain);playNote(659,'sine',t+0.14,0.07,0.38,sfxGain);playNote(784,'sine',t+0.14,0.2,0.28,sfxGain);},
@@ -818,10 +818,11 @@ function mkBoss(wave){
   const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
   const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
   const r=55+tier*8;
-  const hp=Math.round((3000+wave*800)*em);
+  const bossScale=wave===10?0.9:1.0;
+  const hp=Math.round((3000+wave*800)*em*bossScale);
   return [{
     name:names[wave]||'Boss Evil',hp,maxHP:hp,
-    dmg:(80+wave*15)*em,speed:(0.28+tier*0.04)*sm,range:150+tier*10,
+    dmg:(80+wave*15)*em*bossScale,speed:(0.28+tier*0.04)*sm,range:150+tier*10,
     reward:Math.round(150*tier),color:colors[wave]||'#440044',r,
     active:true,attackCooldown:0,spawnDelay:0,
     x:CX,y:CY-(R-r-10)
@@ -989,10 +990,18 @@ function reviveDeadDonuts(){
 }
 function tickDefend(live){
   state.myDonuts.forEach(d=>{
-    if(d.attackCooldown>0){d.attackCooldown--;return;}
-    let tgt=null,min=Infinity;
-    live.forEach(e=>{const dd=dist(d,e);if(dd<d.range&&dd<min){min=dd;tgt=e;}});
-    if(tgt)shoot(d,tgt);
+    if(d.attackCooldown>0){d.attackCooldown--;}
+    else{
+      let tgt=null,min=Infinity;
+      live.forEach(e=>{const dd=dist(d,e);if(dd<d.range&&dd<min){min=dd;tgt=e;}});
+      if(tgt)shoot(d,tgt);
+    }
+    let nearest=null,nearestD=Infinity;
+    live.forEach(e=>{const dd=dist(d,e);if(dd<nearestD){nearestD=dd;nearest=e;}});
+    if(nearest&&nearestD>d.range&&nearestD<d.range*1.5){
+      const dx=nearest.x-d.x,dy=nearest.y-d.y;
+      d.x+=(dx/nearestD)*d.speed*0.5;d.y+=(dy/nearestD)*d.speed*0.5;
+    }
   });
   tickProjectiles();tickEvilProjectiles();
   live.forEach(e=>{
