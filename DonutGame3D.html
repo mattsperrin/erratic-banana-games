@@ -356,7 +356,7 @@ const DONUT_TYPES=[
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let state={
-  coins:30,wave:0,baseHP:100,maxBaseHP:100,
+  coins:50,wave:0,baseHP:100,maxBaseHP:100,
   enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,
   myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],
   waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3,
@@ -740,10 +740,10 @@ canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonut
 // ── Waves ─────────────────────────────────────────────────────────────────────
 function mkEnemies(wave,waveType){
   const bonusStart=difficulty==='hard'?1:0;
-  const armyBonus=Math.floor((state.myDonuts.length+state.deadDonuts.length)/3);
+  const armyBonus=Math.floor((state.myDonuts.length+state.deadDonuts.length)/4);
   const count=waveType==='attack'?lastDefendCount:1+bonusStart+armyBonus+Math.floor(wave*DIFF_MULT[difficulty]);
   if(waveType==='defend')lastDefendCount=count;
-  const em=Math.pow(1.1,Math.floor(wave/6))*(waveType==='attack'?0.9:1.0);
+  const em=Math.pow(1.1,Math.floor(wave/8))*(waveType==='attack'?0.9:1.0);
   const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
   const allTiers=[
     {name:'Tiny Evil', unlockWave:1,  hp:Math.round((20+wave*5)*em),    dmg:(4+wave*1.2)*em,  speed:(0.675+wave*0.045)*sm,range:60,  reward:4,   color:'#ff5555',r:14},
@@ -776,7 +776,7 @@ function cycleDifficulty(){
 let spawnIdx=0,lastDefendCount=3,visitedShopThisWave=false,nextNonBossType='defend';
 
 function mkBoss(wave){
-  const em=Math.pow(1.1,Math.floor(wave/6));
+  const em=Math.pow(1.1,Math.floor(wave/8));
   const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
   const tier=wave/10;
   const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
@@ -840,6 +840,7 @@ function loseLife(){
     logMsg('No lives left — GAME OVER!','bad');
     document.getElementById('gameover-overlay').classList.add('show');
   }else{
+    if(state.waveType!=='boss')nextNonBossType=nextNonBossType==='defend'?'attack':'defend';
     state.wave--;state.baseHP=Math.max(30,state.baseHP);DonutAudio.stopMusic();
     const l=state.lives;
     logMsg(`💔 Life lost! ${l} ${l===1?'life':'lives'} remaining — retry the wave!`,'bad');
@@ -968,7 +969,7 @@ function tickDefend(live){
     else e.attackCooldown--;
   });
   if(state.waveActive&&spawnIdx>=state.enemies.length&&live.length===0){
-    state.waveActive=false;const b=state.wave*5;state.coins+=b;state.baseHP=Math.min(state.maxBaseHP,state.baseHP+15);
+    state.waveActive=false;const b=state.wave*10;state.coins+=b;state.baseHP=Math.min(state.maxBaseHP,state.baseHP+15);
     state.projectiles=[];state.evilProjectiles=[];resetDonutsToBase();reviveDeadDonuts();DonutAudio.sfxWaveWin();
     state.waveHistory.push({wave:state.wave,type:'Defend',result:'Victory',detail:`+${b} coins, base +15 HP`});
     visitedShopThisWave=false;
@@ -1014,7 +1015,7 @@ function tickAttack(live){
   });
   if(!state.waveActive)return;
   if(state.enemyBaseHP<=0||(spawnIdx>=state.enemies.length&&live.length===0)){
-    state.waveActive=false;const b=state.wave*8;state.coins+=b;
+    state.waveActive=false;const b=state.wave*10;state.coins+=b;
     state.projectiles=[];state.evilProjectiles=[];resetDonutsToBase();reviveDeadDonuts();DonutAudio.sfxWaveWin();
     state.waveHistory.push({wave:state.wave,type:'Attack',result:'Victory',detail:`+${b} coins`});
     visitedShopThisWave=false;
@@ -1120,7 +1121,7 @@ function render3D(){
 
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetGame(){
-  Object.assign(state,{coins:30,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
+  Object.assign(state,{coins:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
   visitedShopThisWave=false;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
