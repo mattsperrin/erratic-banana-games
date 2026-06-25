@@ -200,6 +200,10 @@
   #victory-overlay.show { display:block; }
   #victory-overlay .vic-title { font-size:2.4em; font-weight:bold; color:#FFD700; text-shadow:0 0 24px #f4a43a,0 0 8px #000; }
   #victory-overlay .vic-sub { font-size:1em; color:#fff; margin-top:8px; text-shadow:0 0 10px #000; }
+  #sel-box {
+    display:none;position:absolute;border:2px dashed #FFD700;
+    background:rgba(255,215,0,0.06);pointer-events:none;z-index:5;
+  }
   #donut-label {
     display: none; position: absolute; pointer-events: none;
     background: rgba(0,0,0,0.75); color: #f4d03f; font-size: 0.8em;
@@ -221,7 +225,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v0.9</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.0</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -246,6 +250,7 @@
 </div>
 <div id="game-container">
   <canvas id="canvas" width="600" height="600"></canvas>
+  <div id="sel-box"></div>
   <div id="wave-banner"></div>
   <div id="donut-label"></div>
   <div id="gameover-overlay"><div class="go-title">💀 GAME OVER</div><div class="go-sub">Click "Next Wave" to restart</div></div>
@@ -359,7 +364,7 @@ let state={
   coins:50,wave:0,baseHP:100,maxBaseHP:100,
   enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,
   myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],
-  waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3,
+  waveActive:false,gameOver:false,selectedDonuts:[],waveHistory:[],lives:3,
 };
 
 // ── THREE.JS SCENE ────────────────────────────────────────────────────────────
@@ -369,7 +374,7 @@ scene.background=new THREE.Color(0x1a0900);
 scene.fog=new THREE.Fog(0x1a0900,600,2000);
 
 const camera=new THREE.PerspectiveCamera(50,1,1,3000);
-camera.position.set(0,480,390);
+camera.position.set(0,350,380);
 camera.lookAt(new THREE.Vector3(0,0,-20));
 
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
@@ -708,12 +713,38 @@ function shopNext(){if(shopPage<Math.ceil(DONUT_TYPES.length/SHOP_PAGE_SIZE)-1)o
 function mineBlocks(){if(state.gameOver)return;if(state.waveActive){logMsg("Can't mine during a wave!",'bad');return;}const b=state.blocks.find(b=>b.hp>0);if(!b){logMsg('No blocks left — they respawn next wave.','info');return;}openBlock(b);}
 
 // ── Canvas interaction ────────────────────────────────────────────────────────
+let dragStart=null,didDrag=false;
+const selBox=document.getElementById('sel-box');
+canvas.addEventListener('mousedown',e=>{
+  const rect=canvas.getBoundingClientRect();
+  dragStart={x:e.clientX-rect.left,y:e.clientY-rect.top};
+  didDrag=false;
+});
 canvas.addEventListener('mousemove',e=>{
   const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
   const hit=state.myDonuts.some(d=>{const s=project2D(d.x,d.y);return Math.hypot(mx-s.x,my-s.y)<d.outerR*1.3;});
-  canvas.style.cursor=(hit||state.selectedDonut)?'pointer':'default';
+  canvas.style.cursor=(hit||state.selectedDonuts.length)?'pointer':'default';
+  if(dragStart&&(e.buttons&1)){
+    const dx=mx-dragStart.x,dy=my-dragStart.y;
+    if(Math.hypot(dx,dy)>6){
+      didDrag=true;
+      const x=Math.min(dragStart.x,mx),y=Math.min(dragStart.y,my);
+      selBox.style.cssText=`display:block;left:${x}px;top:${y}px;width:${Math.abs(dx)}px;height:${Math.abs(dy)}px;`;
+    }
+  }
+});
+canvas.addEventListener('mouseup',e=>{
+  selBox.style.display='none';
+  if(didDrag&&dragStart){
+    const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    const x1=Math.min(dragStart.x,mx),x2=Math.max(dragStart.x,mx);
+    const y1=Math.min(dragStart.y,my),y2=Math.max(dragStart.y,my);
+    state.selectedDonuts=state.myDonuts.filter(d=>{const s=project2D(d.x,d.y);return s.x>=x1&&s.x<=x2&&s.y>=y1&&s.y<=y2;});
+  }
+  dragStart=null;
 });
 canvas.addEventListener('click',e=>{
+  if(didDrag){didDrag=false;return;}
   if(state.gameOver)return;
   const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
   // Block click
@@ -722,20 +753,24 @@ canvas.addEventListener('click',e=>{
     const s=project2D(b.x,b.y);
     if(Math.hypot(mx-s.x,my-s.y)<18){if(state.waveActive){logMsg("Can't mine during a wave!",'bad');return;}openBlock(b);return;}
   }
-  // Donut select
+  // Donut select/deselect
   const hit=state.myDonuts.find(d=>{const s=project2D(d.x,d.y);return Math.hypot(mx-s.x,my-s.y)<d.outerR*1.3;});
-  if(hit){state.selectedDonut=state.selectedDonut===hit?null:hit;return;}
-  // Move selected donut
-  if(state.selectedDonut){
+  if(hit){
+    const i=state.selectedDonuts.indexOf(hit);
+    state.selectedDonuts=i>=0?state.selectedDonuts.filter(d=>d!==hit):[hit];
+    return;
+  }
+  // Move all selected donuts
+  if(state.selectedDonuts.length){
     const fp=getFloorPoint(e.clientX,e.clientY);
-    if(!fp){return;}
-    if(dist(fp,{x:CX,y:CY})>R-state.selectedDonut.outerR-5){logMsg("Can't place outside the arena!",'bad');return;}
+    if(!fp)return;
+    if(dist(fp,{x:CX,y:CY})>R-40){logMsg("Can't place outside the arena!",'bad');return;}
     DonutAudio.resume();DonutAudio.sfxMove();
-    state.selectedDonut.targetX=fp.x;state.selectedDonut.targetY=fp.y;
-    state.selectedDonut=null;canvas.style.cursor='default';
+    state.selectedDonuts.forEach(d=>{d.targetX=fp.x;d.targetY=fp.y;});
+    state.selectedDonuts=[];canvas.style.cursor='default';
   }
 });
-canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonut=null;});
+canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonuts=[];});
 
 // ── Waves ─────────────────────────────────────────────────────────────────────
 function mkEnemies(wave,waveType){
@@ -800,9 +835,9 @@ function tickBoss(live){
   tickProjectiles();tickEvilProjectiles();
   live.forEach(e=>{
     const dx=BASE_TARGET.x-e.x,dy=BASE_TARGET.y-e.y,dd=Math.hypot(dx,dy);
+    if(e.attackCooldown>0)e.attackCooldown--;
+    else if(dd<=e.range)evilShoot(e,BASE_TARGET);
     if(dd>e.range){e.x+=(dx/dd)*e.speed;e.y+=(dy/dd)*e.speed;}
-    else if(e.attackCooldown<=0){evilShoot(e,BASE_TARGET);}
-    else e.attackCooldown--;
   });
   if(live.length>0){
     const pct=Math.max(0,live[0].hp/live[0].maxHP);
@@ -964,9 +999,9 @@ function tickDefend(live){
     // Only detour to attack a donut if it's much closer than the base (strong base preference)
     state.myDonuts.forEach(d=>{if(d.currentHP>0){const dd=dist(e,d);if(dd<md*0.5){md=dd;mt=d;}}});
     const dx=mt.x-e.x,dy=mt.y-e.y,dd=Math.hypot(dx,dy);
+    if(e.attackCooldown>0)e.attackCooldown--;
+    else if(dd<=e.range)evilShoot(e,mt);
     if(dd>e.range){e.x+=(dx/dd)*e.speed;e.y+=(dy/dd)*e.speed;}
-    else if(e.attackCooldown<=0){evilShoot(e,mt);}
-    else e.attackCooldown--;
   });
   if(state.waveActive&&spawnIdx>=state.enemies.length&&live.length===0){
     state.waveActive=false;const b=state.wave*10;state.coins+=b;state.baseHP=state.maxBaseHP;
@@ -1003,9 +1038,9 @@ function tickAttack(live){
     state.myDonuts.forEach(d=>{if(d.currentHP>0&&dist(d,ENEMY_BASE_TARGET)<LEASH){const dd=dist(e,d);if(dd<min){min=dd;tgt=d;}}});
     if(tgt){
       const dx=tgt.x-e.x,dy=tgt.y-e.y,dd=Math.hypot(dx,dy);
+      if(e.attackCooldown>0)e.attackCooldown--;
+      else if(dd<=e.range)evilShoot(e,tgt);
       if(dd>e.range){e.x+=(dx/dd)*e.speed;e.y+=(dy/dd)*e.speed;}
-      else if(e.attackCooldown<=0){evilShoot(e,tgt);}
-      else e.attackCooldown--;
     }else{
       // Return towards own base
       const hx=ENEMY_BASE_TARGET.x-e.x,hy=ENEMY_BASE_TARGET.y-e.y,hd=Math.hypot(hx,hy);
@@ -1044,7 +1079,7 @@ function update(){
     if(dd<3){d.x=d.targetX;d.y=d.targetY;delete d.targetX;delete d.targetY;spawnParticles(d.x,d.y,d.frostingColor,6);DonutAudio.sfxArrive();}
     else{d.x+=(dx/dd)*3.5;d.y+=(dy/dd)*3.5;}
   });
-  if(state.selectedDonut&&!state.myDonuts.includes(state.selectedDonut))state.selectedDonut=null;
+  state.selectedDonuts=state.selectedDonuts.filter(d=>state.myDonuts.includes(d));
   state.particles=state.particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=0.91;p.vy*=0.91;return--p.life>0;});
   state.floatingTexts=state.floatingTexts.filter(t=>{t.y-=0.8;return--t.life>0;});
 }
@@ -1061,15 +1096,15 @@ function render3D(){
     g.rotation.y+=0.013;
     setHP(g,d.currentHP/d.hp);
     const sel=g.getObjectByName('selring');
-    if(sel){sel.visible=state.selectedDonut===d;if(sel.visible)sel.rotation.z=now*0.003;}
+    if(sel){sel.visible=state.selectedDonuts.includes(d);if(sel.visible)sel.rotation.z=now*0.003;}
     const rng=g.getObjectByName('range');
-    if(rng)rng.visible=state.selectedDonut===d;
+    if(rng)rng.visible=state.selectedDonuts.includes(d);
   });
   const lbl=document.getElementById('donut-label');
-  if(state.selectedDonut&&state.myDonuts.includes(state.selectedDonut)){
-    const sp=project2D(state.selectedDonut.x,state.selectedDonut.y);
-    lbl.textContent=state.selectedDonut.name;
-    lbl.style.left=sp.x+'px';lbl.style.top=(sp.y-state.selectedDonut.outerR-6)+'px';lbl.style.display='block';
+  if(state.selectedDonuts.length===1&&state.myDonuts.includes(state.selectedDonuts[0])){
+    const sd=state.selectedDonuts[0],sp=project2D(sd.x,sd.y);
+    lbl.textContent=sd.name;
+    lbl.style.left=sp.x+'px';lbl.style.top=(sp.y-sd.outerR-6)+'px';lbl.style.display='block';
   }else{lbl.style.display='none';}
 
   // Enemies — only visible during an active wave
@@ -1121,7 +1156,7 @@ function render3D(){
 
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetGame(){
-  Object.assign(state,{coins:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
+  Object.assign(state,{coins:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonuts:[],waveHistory:[],lives:3});
   visitedShopThisWave=false;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
