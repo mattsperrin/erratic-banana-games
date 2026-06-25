@@ -221,7 +221,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v0.7</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -500,17 +500,13 @@ function createEnemyMesh(e){
   const fr=r*0.82,ft=tube*0.72;
   const frost=new THREE.Mesh(new THREE.TorusGeometry(fr,ft,14,52),new THREE.MeshPhongMaterial({color:new THREE.Color(e.color),emissive:new THREE.Color(e.color),emissiveIntensity:0.45,shininess:80}));
   frost.rotation.x=Math.PI/2;frost.position.y=tube*0.45;frost.castShadow=true;g.add(frost);
-  // Glow point light
   const glow=new THREE.PointLight(new THREE.Color(e.color),0.5,e.r*9);
   glow.position.y=8;g.add(glow);
   const bar=hpBar(e.r*2,e.r+9);g.add(bar);
   return g;
 }
 
-function createProjMesh(p){
-  const m=new THREE.Mesh(new THREE.SphereGeometry(p.r,8,8),new THREE.MeshPhongMaterial({color:new THREE.Color(p.color),emissive:new THREE.Color(p.color),emissiveIntensity:0.55,shininess:120}));
-  return m;
-}
+function createProjMesh(p){return new THREE.Mesh(new THREE.SphereGeometry(p.r,8,8),new THREE.MeshPhongMaterial({color:new THREE.Color(p.color),emissive:new THREE.Color(p.color),emissiveIntensity:0.55,shininess:120}));}
 function createEvilProjMesh(){
   return new THREE.Mesh(new THREE.SphereGeometry(4,8,8),new THREE.MeshPhongMaterial({color:0xff2200,emissive:0xff2200,emissiveIntensity:0.7,shininess:120}));
 }
@@ -519,7 +515,6 @@ function createBlockMesh(){
   const g=new THREE.Group();
   const mat=new THREE.MeshPhongMaterial({color:0xf4c800,emissive:0xd4a000,emissiveIntensity:0.35,shininess:80});
   g.add(new THREE.Mesh(new THREE.BoxGeometry(20,20,20),mat));
-  // "?" mark as a smaller bright box on top face
   const top=new THREE.Mesh(new THREE.BoxGeometry(6,1,6),new THREE.MeshBasicMaterial({color:0xffffff}));
   top.position.y=10.5;g.add(top);
   return g;
@@ -680,7 +675,7 @@ function toggleWaveToast(e){
   if(_waveToastOpen){toast.classList.remove('show');_waveToastOpen=false;return;}
   if(state.waveHistory.length===0){toast.innerHTML='No waves played yet.';toast.classList.add('show');_waveToastOpen=true;return;}
   const icons={Victory:'✅',Defeat:'💀'};
-  const typeIcon={Defend:'🛡️',Attack:'⚔️'};
+  const typeIcon={Defend:'🛡️',Attack:'⚔️',Boss:'☠️'};
   const lines=[...state.waveHistory].reverse().map(h=>{
     const cls=h.result==='Victory'?'wt-win':'wt-lose';
     return `<span class="${cls}">${icons[h.result]} Wave ${h.wave} ${typeIcon[h.type]} ${h.type} — ${h.result} (${h.detail})</span>`;
@@ -688,10 +683,6 @@ function toggleWaveToast(e){
   toast.innerHTML=lines.join('<br>');
   toast.classList.add('show');_waveToastOpen=true;
 }
-document.addEventListener('click',()=>{
-  if(_waveToastOpen){document.getElementById('wave-toast').classList.remove('show');_waveToastOpen=false;}
-});
-
 let _toastOpen=false;
 function toggleDonutToast(e){
   e&&e.stopPropagation();
@@ -707,6 +698,7 @@ function toggleDonutToast(e){
   toast.classList.add('show');_toastOpen=true;
 }
 document.addEventListener('click',()=>{
+  if(_waveToastOpen){document.getElementById('wave-toast').classList.remove('show');_waveToastOpen=false;}
   if(_toastOpen){document.getElementById('donut-toast').classList.remove('show');_toastOpen=false;}
 });
 function buyFromShop(id){const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();}
@@ -839,7 +831,7 @@ function tickBoss(live){
 function loseLife(){
   state.lives--;
   state.waveActive=false;state.projectiles=[];state.evilProjectiles=[];
-  state.waveHistory.push({wave:state.wave,type:state.waveType==='defend'?'Defend':'Attack',result:'Defeat',detail:state.lives>0?`Life lost (${state.lives} left)`:'No lives left'});
+  state.waveHistory.push({wave:state.wave,type:state.waveType==='defend'?'Defend':state.waveType==='boss'?'Boss':'Attack',result:'Defeat',detail:state.lives>0?`Life lost (${state.lives} left)`:'No lives left'});
   reviveDeadDonuts();
   document.getElementById('boss-bar-wrap').style.display='none';
   DonutAudio.sfxWaveLose();
@@ -955,7 +947,7 @@ function tickEvilProjectiles(){
   });
 }
 function reviveDeadDonuts(){
-  state.deadDonuts.forEach(d=>{d.currentHP=d.hp;const p=defaultPos();d.x=p.x;d.y=p.y;delete d.targetX;delete d.targetY;});
+  state.deadDonuts.forEach(d=>{d.currentHP=d.hp;d.attackCooldown=0;const p=defaultPos();d.x=p.x;d.y=p.y;delete d.targetX;delete d.targetY;});
   state.myDonuts.push(...state.deadDonuts);state.deadDonuts=[];
 }
 function tickDefend(live){
@@ -1128,7 +1120,7 @@ function render3D(){
 
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetGame(){
-  Object.assign(state,{coins:30,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
+  Object.assign(state,{coins:30,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
   visitedShopThisWave=false;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
