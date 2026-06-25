@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Donut Game - Noah's Edition</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0a00;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: #fff;
+    overflow: hidden;
+  }
+  #title {
+    font-size: 2em;
+    font-weight: bold;
+    color: #f4a43a;
+    text-shadow: 0 0 20px #f4a43a88;
+    margin-bottom: 10px;
+    letter-spacing: 3px;
+  }
+  #hud {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 20px;
+    border-radius: 30px;
+    border: 1px solid #f4a43a44;
+  }
+  .hud-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 1em;
+    font-weight: bold;
+  }
+  .hud-item span { color: #f4d03f; }
+  #game-container {
+    position: relative;
+    width: 600px;
+    height: 600px;
+  }
+  canvas {
+    display: block;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 40px #f4a43a55;
+  }
+  #shop-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #shop-overlay.open { display: flex; }
+  #shop-panel {
+    background: #2d1200;
+    border: 3px solid #f4a43a;
+    border-radius: 20px;
+    padding: 30px;
+    min-width: 380px;
+    max-width: 90vw;
+  }
+  #shop-panel h2 {
+    text-align: center;
+    color: #f4a43a;
+    font-size: 1.8em;
+    margin-bottom: 6px;
+  }
+  #shop-coins {
+    text-align: center;
+    color: #f4d03f;
+    font-size: 1.1em;
+    margin-bottom: 18px;
+  }
+  .shop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.2s;
+  }
+  .shop-item:hover { background: rgba(255,255,255,0.12); }
+  .shop-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .shop-item-icon { font-size: 1.8em; }
+  .shop-item-info { display: flex; flex-direction: column; }
+  .shop-item-name { font-weight: bold; font-size: 1em; }
+  .shop-item-stat { font-size: 0.8em; color: #aaa; }
+  .shop-item-price { color: #f4d03f; font-weight: bold; font-size: 1em; }
+  .buy-btn {
+    background: #f4a43a;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.2s;
+  }
+  .buy-btn:hover:not(:disabled) { background: #f4d03f; }
+  .buy-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+  #close-shop {
+    display: block;
+    margin: 18px auto 0;
+    background: #333;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 28px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  #close-shop:hover { background: #555; }
+  #log {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 12px;
+    padding: 8px 16px;
+    width: 600px;
+    max-height: 80px;
+    overflow-y: auto;
+    font-size: 0.82em;
+    color: #ddd;
+    border: 1px solid #f4a43a33;
+  }
+  #log p { margin: 1px 0; }
+  #log p.good { color: #7dff7d; }
+  #log p.bad { color: #ff7d7d; }
+  #log p.info { color: #7dbfff; }
+  #btns {
+    margin-top: 10px;
+    display: flex;
+    gap: 12px;
+  }
+  .game-btn {
+    background: #f4a43a;
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 24px;
+    font-weight: bold;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .game-btn:hover { background: #f4d03f; }
+  #wave-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #f4a43a;
+    text-shadow: 0 0 20px #000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 10;
+    text-align: center;
+    width: 300px;
+  }
+</style>
+</head>
+<body>
+<div id="title">🍩 DONUT GAME 🍩</div>
+<div id="hud">
+  <div class="hud-item">💰 Coins: <span id="hud-coins">10</span></div>
+  <div class="hud-item">🌊 Wave: <span id="hud-wave">1</span></div>
+  <div class="hud-item">❤️ Base HP: <span id="hud-hp">100</span></div>
+  <div class="hud-item">🍩 Donuts: <span id="hud-donuts">0</span></div>
+  <button id="mute-btn" onclick="toggleMute()" style="background:none;border:1px solid #f4a43a44;color:#f4a43a;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:0.9em;">🔊</button>
+</div>
+<div id="game-container">
+  <canvas id="canvas" width="600" height="600"></canvas>
+  <div id="wave-banner"></div>
+</div>
+<div id="log"></div>
+<div id="btns">
+  <button class="game-btn" onclick="openShop()">🏪 Shop</button>
+  <button class="game-btn" onclick="nextWave()">⚔️ Next Wave</button>
+  <button class="game-btn" onclick="mineBlocks()">⛏️ Mine Blocks</button>
+</div>
+
+<div id="shop-overlay">
+  <div id="shop-panel">
+    <h2>🏪 Donut Shop</h2>
+    <div id="shop-coins">💰 Coins: <span id="shop-coin-count">0</span></div>
+    <div id="shop-items"></div>
+    <button id="close-shop" onclick="closeShop()">Close</button>
+  </div>
+</div>
+
+<script src="audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
