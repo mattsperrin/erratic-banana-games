@@ -221,6 +221,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -286,7 +287,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 <script>
 // ── Audio (unchanged) ────────────────────────────────────────────────────────
 const DonutAudio = (() => {
-  let ctx=null,masterGain,musicGain,sfxGain,musicPlaying=false,loopTimer=null,muted=false,lastShootT=0,lastBaseHitT=0;
+  let ctx=null,masterGain,musicGain,sfxGain,musicPlaying=false,loopTimer=null,bossMusicPlaying=false,bossLoopTimer=null,muted=false,lastShootT=0,lastBaseHitT=0;
   const BPM=148,B=60/BPM,H=B*2,E=B/2,_=0;
   const C3=130.81,G3=196,C4=261.63,D4=293.66,F4=349.23,G4=392,A4=440,B4=493.88,C5=523.25,D5=587.33,E5=659.25,F5=698.46,G5=783.99,A5=880;
   const MELODY=[[C5,E],[E5,E],[G5,E],[E5,E],[D5,E],[C5,E],[D5,E],[E5,E],[C5,H],[_,B],[G4,E],[A4,E],[C5,E],[D5,E],[E5,E],[F5,E],[G5,E],[A5,E],[G5,E],[E5,E],[F5,E],[E5,E],[D5,E],[C5,E],[E5,B],[_,B],[G5,E],[E5,E],[G5,E],[A5,E],[G5,E],[F5,E],[E5,E],[D5,E],[C5,H],[E5,B],[G5,B],[A5,E],[G5,E],[F5,E],[E5,E],[D5,E],[E5,E],[D5,E],[C5,E],[G4,E],[A4,E],[B4,E],[C5,E],[C5,H]];
@@ -297,10 +298,16 @@ const DonutAudio = (() => {
   function scheduleTrack(track,waveType,vol,dest,startT){let t=startT;for(const[freq,dur]of track){playNote(freq,waveType,t,dur*0.88,vol,dest);t+=dur;}return t-startT;}
   function scheduleDrums(startT,bars){for(let bar=0;bar<bars;bar++)for(let beat=0;beat<4;beat++){const t=startT+(bar*4+beat)*B;if(beat===0||beat===2){const ko=ctx.createOscillator(),kg=ctx.createGain();ko.frequency.setValueAtTime(110,t);ko.frequency.exponentialRampToValueAtTime(32,t+0.13);kg.gain.setValueAtTime(0.55,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.15);ko.connect(kg);kg.connect(musicGain);ko.start(t);ko.stop(t+0.18);}if(beat===1||beat===3){noise(t,0.07,0.18,1200,8000,musicGain);playNote(180,'sine',t,0.05,0.12,musicGain);}for(let h=0;h<2;h++)noise(t+h*E,0.022,0.09,7000,18000,musicGain);}}
   function scheduleLoop(startT){if(!musicPlaying)return;const dur=scheduleTrack(MELODY,'triangle',0.5,musicGain,startT);scheduleTrack(BASS,'sine',0.6,musicGain,startT);scheduleDrums(startT,8);loopTimer=setTimeout(()=>scheduleLoop(startT+dur),(dur-0.5)*1000);}
+  const BB=60/95,BE=BB/2,BH=BB*2,Eb4=311,Bb4=466,Eb5=622,Bb3=233,D3=147,Eb3=156;
+  const BOSS_MEL=[[D5,BE],[Bb4,BE],[G4,BE],[F4,BE],[Eb4,BE],[D4,BE],[C4,BE],[D4,BE],[G4,BE],[Bb4,BE],[D5,BE],[Eb5,BE],[D5,BE],[C5,BE],[Bb4,BE],[A4,BE],[G4,BE],[D5,BE],[F5,BE],[Eb5,BE],[D5,BE],[C5,BE],[Bb4,BE],[G4,BE],[D5,BH],[G4,BH],[G3,BB],[_,BB]];
+  const BOSS_BAS=[[G3,BB],[_,BB],[D3,BB],[_,BB],[Eb3,BB],[_,BB],[D3,BB],[_,BB],[G3,BB],[_,BB],[D3,BB],[_,BB],[Bb3,BB],[_,BB],[D3,BH]];
+  function scheduleBossDrums(startT,bars){for(let bar=0;bar<bars;bar++)for(let beat=0;beat<4;beat++){const t=startT+(bar*4+beat)*BB;const ko=ctx.createOscillator(),kg=ctx.createGain();ko.frequency.setValueAtTime(150,t);ko.frequency.exponentialRampToValueAtTime(28,t+0.2);kg.gain.setValueAtTime(0.75,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.22);ko.connect(kg);kg.connect(musicGain);ko.start(t);ko.stop(t+0.25);if(beat===1||beat===3){noise(t,0.1,0.3,1000,6000,musicGain);playNote(190,'sine',t,0.07,0.2,musicGain);}for(let h=0;h<2;h++)noise(t+h*BE,0.02,0.06,9000,18000,musicGain);}}
+  function scheduleBossLoop(startT){if(!bossMusicPlaying)return;const dur=scheduleTrack(BOSS_MEL,'sawtooth',0.45,musicGain,startT);scheduleTrack(BOSS_BAS,'sawtooth',0.55,musicGain,startT);scheduleBossDrums(startT,5);bossLoopTimer=setTimeout(()=>scheduleBossLoop(startT+dur),(dur-0.5)*1000);}
   return{
     init,resume(){if(ctx&&ctx.state==='suspended')ctx.resume();},
     startMusic(){init();if(musicPlaying)return;musicPlaying=true;scheduleLoop(ctx.currentTime+0.1);},
-    stopMusic(){musicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}},
+    startBossMusic(){init();if(bossMusicPlaying)return;bossMusicPlaying=true;scheduleBossLoop(ctx.currentTime+0.1);},
+    stopMusic(){musicPlaying=false;bossMusicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}},
     toggleMute(){init();muted=!muted;masterGain.gain.setTargetAtTime(muted?0:0.55,ctx.currentTime,0.05);return muted;},
     sfxCoin(){init();const t=ctx.currentTime;[784,988,1319].forEach((f,i)=>playNote(f,'square',t+i*0.06,0.09,0.2,sfxGain));},
     sfxBuy(){init();const t=ctx.currentTime;playNote(392,'sine',t,0.07,0.38,sfxGain);playNote(523,'sine',t+0.07,0.07,0.38,sfxGain);playNote(659,'sine',t+0.14,0.07,0.38,sfxGain);playNote(784,'sine',t+0.14,0.2,0.28,sfxGain);},
@@ -879,7 +886,8 @@ function doStartWave(){
   }else{
     state.enemies=mkEnemies(state.wave,state.waveType);
   }
-  if((state.wave-1)%6===0)spawnBlocks();DonutAudio.startMusic();
+  if((state.wave-1)%6===0)spawnBlocks();
+  if(state.waveType==='boss')DonutAudio.startBossMusic();else DonutAudio.startMusic();
   const newTierNames={6:'Dark Evil',12:'Vile Evil',18:'Dread Evil',24:'Infernal',30:'Doom Evil'};
   if(newTierNames[state.wave])logMsg(`☠️ New enemy type: ${newTierNames[state.wave]}!`,'bad');
   if(state.waveType==='boss'){
