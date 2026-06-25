@@ -775,12 +775,13 @@ canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonut
 
 // ── Waves ─────────────────────────────────────────────────────────────────────
 function mkEnemies(wave,waveType){
-  const bonusStart=difficulty==='hard'?1:0;
+  const bonusStart=difficulty==='hard'?2:difficulty==='medium'?1:0;
   const armyBonus=Math.floor((state.myDonuts.length+state.deadDonuts.length)/4);
   const count=waveType==='attack'?lastDefendCount:1+bonusStart+armyBonus+Math.floor(wave*DIFF_MULT[difficulty]);
   if(waveType==='defend')lastDefendCount=count;
-  const em=Math.pow(1.1,Math.floor(wave/8))*(waveType==='attack'?0.9:1.0);
-  const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
+  const emBase=difficulty==='hard'?Math.pow(1.12,Math.floor(wave/6)):Math.pow(1.1,Math.floor(wave/8));
+  const em=emBase*(waveType==='attack'?0.9:1.0);
+  const sm=difficulty==='easy'?1.0:difficulty==='medium'?1.2:1.45;
   const allTiers=[
     {name:'Tiny Evil', unlockWave:1,  hp:Math.round((20+wave*5)*em),    dmg:(4+wave*1.2)*em,  speed:(0.675+wave*0.045)*sm,range:60,  reward:4,   color:'#ff5555',r:14},
     {name:'Mean Evil', unlockWave:1,  hp:Math.round((40+wave*9)*em),    dmg:(8+wave*2)*em,    speed:(0.54+wave*0.0375)*sm,range:85,  reward:8,   color:'#cc2222',r:18},
@@ -792,7 +793,8 @@ function mkEnemies(wave,waveType){
     {name:'Infernal',  unlockWave:24, hp:Math.round((1600+wave*150)*em),dmg:(260+wave*22)*em, speed:0.32*sm,              range:160, reward:180, color:'#CC4400',r:41},
     {name:'Doom Evil', unlockWave:30, hp:Math.round((2800+wave*220)*em),dmg:(420+wave*32)*em, speed:0.35*sm,              range:175, reward:250, color:'#111111',r:44},
   ];
-  const tiers=allTiers.filter(t=>wave>=t.unlockWave);
+  const tierBoost=difficulty==='hard'?2:0;
+  const tiers=allTiers.filter(t=>wave+tierBoost>=t.unlockWave);
   return Array.from({length:count},(_,i)=>{
     const tier=tiers[Math.min(Math.floor(i/3+(wave>3?1:0)),tiers.length-1)];
     const aBase=-Math.PI*0.5,aRange=waveType==='defend'?Math.PI:ENEMY_BASE_ARC*0.8;
@@ -801,7 +803,7 @@ function mkEnemies(wave,waveType){
   });
 }
 let difficulty='medium';
-const DIFF_MULT={easy:0.9,medium:1.0,hard:1.1};
+const DIFF_MULT={easy:1.0,medium:1.1,hard:1.3};
 const DIFF_LABELS={easy:'😊 Easy',medium:'🎯 Medium',hard:'💀 Hard'};
 function cycleDifficulty(){
   if(state.wave>0){logMsg('Difficulty is locked after wave 1 starts!','bad');return;}
@@ -813,7 +815,7 @@ let spawnIdx=0,lastDefendCount=3,visitedShopThisWave=false,nextNonBossType='defe
 
 function mkBoss(wave){
   const em=Math.pow(1.1,Math.floor(wave/8));
-  const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
+  const sm=difficulty==='easy'?1.0:difficulty==='medium'?1.2:1.45;
   const tier=wave/10;
   const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
   const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
@@ -1166,7 +1168,7 @@ function render3D(){
 
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetGame(){
-  Object.assign(state,{coins:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonuts:[],waveHistory:[],lives:3});
+  Object.assign(state,{coins:difficulty==='hard'?40:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonuts:[],waveHistory:[],lives:3});
   visitedShopThisWave=false;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
