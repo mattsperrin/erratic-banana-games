@@ -236,6 +236,13 @@
     <button class="game-btn" onclick="shopPromptShop()">🏪 Go to Shop</button>
   </div>
 </div>
+<div id="boss-bar-wrap" style="display:none;margin:6px 0 2px;text-align:center;">
+  <div style="color:#ff4444;font-weight:bold;font-size:1em;letter-spacing:2px;margin-bottom:3px;">☠️ BOSS</div>
+  <div style="background:#330000;border:2px solid #ff4444;border-radius:8px;height:18px;width:100%;overflow:hidden;">
+    <div id="boss-bar-fill" style="height:100%;width:100%;background:linear-gradient(90deg,#ff2200,#ff6600);transition:width 0.15s;"></div>
+  </div>
+  <div id="boss-bar-name" style="color:#ff8888;font-size:0.8em;margin-top:2px;"></div>
+</div>
 <div id="game-container">
   <canvas id="canvas" width="600" height="600"></canvas>
   <div id="wave-banner"></div>
@@ -733,9 +740,9 @@ canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonut
 
 // ── Waves ─────────────────────────────────────────────────────────────────────
 function mkEnemies(wave,waveType){
-  const bonusStart=difficulty==='hard'?2:difficulty==='medium'?1:0;
+  const bonusStart=difficulty==='hard'?1:0;
   const armyBonus=Math.floor((state.myDonuts.length+state.deadDonuts.length)/3);
-  const count=waveType==='attack'?lastDefendCount:2+bonusStart+armyBonus+Math.floor(wave*DIFF_MULT[difficulty]);
+  const count=waveType==='attack'?lastDefendCount:1+bonusStart+armyBonus+Math.floor(wave*DIFF_MULT[difficulty]);
   if(waveType==='defend')lastDefendCount=count;
   const em=Math.pow(1.1,Math.floor(wave/6))*(waveType==='attack'?0.9:1.0);
   const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
@@ -767,13 +774,67 @@ function cycleDifficulty(){
   document.getElementById('diff-btn').textContent=DIFF_LABELS[difficulty];
 }
 
-let spawnIdx=0,lastDefendCount=3,visitedShopThisWave=false;
+let spawnIdx=0,lastDefendCount=3,visitedShopThisWave=false,nextNonBossType='defend';
+
+function mkBoss(wave){
+  const em=Math.pow(1.1,Math.floor(wave/6));
+  const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
+  const tier=wave/10;
+  const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
+  const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
+  const r=55+tier*8;
+  const hp=Math.round((3000+wave*800)*em);
+  return [{
+    name:names[wave]||'Boss Evil',hp,maxHP:hp,
+    dmg:(80+wave*15)*em,speed:(0.28+tier*0.04)*sm,range:150+tier*10,
+    reward:Math.round(150*tier),color:colors[wave]||'#440044',r,
+    active:true,attackCooldown:0,spawnDelay:0,
+    x:CX,y:CY-(R-r-10)
+  }];
+}
+
+function tickBoss(live){
+  state.myDonuts.forEach(d=>{
+    if(d.attackCooldown>0){d.attackCooldown--;return;}
+    if(live.length>0&&dist(d,live[0])<d.range)shoot(d,live[0]);
+  });
+  tickProjectiles();tickEvilProjectiles();
+  live.forEach(e=>{
+    const dx=BASE_TARGET.x-e.x,dy=BASE_TARGET.y-e.y,dd=Math.hypot(dx,dy);
+    if(dd>e.range){e.x+=(dx/dd)*e.speed;e.y+=(dy/dd)*e.speed;}
+    else if(e.attackCooldown<=0){evilShoot(e,BASE_TARGET);}
+    else e.attackCooldown--;
+  });
+  if(live.length>0){
+    const pct=Math.max(0,live[0].hp/live[0].maxHP);
+    document.getElementById('boss-bar-fill').style.width=(pct*100)+'%';
+  }
+  if(state.waveActive&&live.length===0){
+    state.waveActive=false;const b=state.wave*20;state.coins+=b;state.baseHP=Math.min(state.maxBaseHP,state.baseHP+20);
+    state.projectiles=[];state.evilProjectiles=[];resetDonutsToBase();reviveDeadDonuts();DonutAudio.sfxWaveWin();
+    state.waveHistory.push({wave:state.wave,type:'Boss',result:'Victory',detail:`+${b} coins`});
+    visitedShopThisWave=false;
+    document.getElementById('boss-bar-wrap').style.display='none';
+    if(state.wave>=30){
+      state.gameOver=true;DonutAudio.stopMusic();
+      logMsg('🏆 YOU WIN! The Doom Lord is defeated!','good');
+      document.getElementById('victory-overlay').classList.add('show');
+    }else{
+      logMsg(`☠️ Boss defeated! +${b} coins! Base HP +20!`,'good');showBanner(`🏆 Boss Down! +${b} coins!`);
+    }
+    updateHUD();
+  }else if(state.waveActive&&state.myDonuts.length===0){
+    document.getElementById('boss-bar-wrap').style.display='none';
+    loseLife();updateHUD();
+  }
+}
 
 function loseLife(){
   state.lives--;
   state.waveActive=false;state.projectiles=[];state.evilProjectiles=[];
   state.waveHistory.push({wave:state.wave,type:state.waveType==='defend'?'Defend':'Attack',result:'Defeat',detail:state.lives>0?`Life lost (${state.lives} left)`:'No lives left'});
   reviveDeadDonuts();
+  document.getElementById('boss-bar-wrap').style.display='none';
   DonutAudio.sfxWaveLose();
   if(state.lives<=0){
     state.gameOver=true;DonutAudio.sfxGameOver();DonutAudio.stopMusic();
@@ -801,14 +862,30 @@ function nextWave(){
 }
 function doStartWave(){
   visitedShopThisWave=false;
-  state.wave++;state.waveType=state.wave%2===1?'defend':'attack';
+  state.wave++;
+  if(state.wave%10===0){
+    state.waveType='boss';
+  }else{
+    state.waveType=nextNonBossType;
+    nextNonBossType=nextNonBossType==='defend'?'attack':'defend';
+  }
   state.waveActive=true;spawnIdx=0;
   resetDonutsToBase();
-  state.enemies=mkEnemies(state.wave,state.waveType);
+  if(state.waveType==='boss'){
+    state.enemies=mkBoss(state.wave);
+    document.getElementById('boss-bar-fill').style.width='100%';
+    document.getElementById('boss-bar-name').textContent=state.enemies[0].name;
+    document.getElementById('boss-bar-wrap').style.display='block';
+  }else{
+    state.enemies=mkEnemies(state.wave,state.waveType);
+  }
   if((state.wave-1)%6===0)spawnBlocks();DonutAudio.startMusic();
   const newTierNames={6:'Dark Evil',12:'Vile Evil',18:'Dread Evil',24:'Infernal',30:'Doom Evil'};
-  if(newTierNames[state.wave])logMsg(`☠️ New enemy type unlocked: ${newTierNames[state.wave]}!`,'bad');
-  if(state.waveType==='defend'){
+  if(newTierNames[state.wave])logMsg(`☠️ New enemy type: ${newTierNames[state.wave]}!`,'bad');
+  if(state.waveType==='boss'){
+    DonutAudio.sfxWaveStart();showBanner(`☠️ Wave ${state.wave} — BOSS!`);
+    logMsg(`Wave ${state.wave}: BOSS WAVE — ${state.enemies[0].name} attacks!`,'bad');
+  }else if(state.waveType==='defend'){
     DonutAudio.sfxWaveStart();showBanner(`🛡️ Wave ${state.wave} — DEFEND!`);
     logMsg(`Wave ${state.wave}: DEFEND! ${state.enemies.length} evil donuts incoming!`,'bad');
   }else{
@@ -941,13 +1018,7 @@ function tickAttack(live){
     state.projectiles=[];state.evilProjectiles=[];resetDonutsToBase();reviveDeadDonuts();DonutAudio.sfxWaveWin();
     state.waveHistory.push({wave:state.wave,type:'Attack',result:'Victory',detail:`+${b} coins`});
     visitedShopThisWave=false;
-    if(state.wave>=30){
-      state.gameOver=true;DonutAudio.stopMusic();
-      logMsg('🏆 YOU WIN! All 30 waves defeated!','good');
-      document.getElementById('victory-overlay').classList.add('show');updateHUD();
-    }else{
-      logMsg(`⚔️ Attack success! +${b} coins. All donuts back at base!`,'good');showBanner(`✅ Attack Success!`);updateHUD();
-    }
+    logMsg(`⚔️ Attack success! +${b} coins. All donuts back at base!`,'good');showBanner(`✅ Attack Success!`);updateHUD();
   }else if(state.myDonuts.length===0){
     loseLife();updateHUD();
   }
@@ -961,6 +1032,7 @@ function update(){
     const live=state.enemies.filter(e=>e.active&&e.hp>0);
     if(state.waveType==='defend')tickDefend(live);
     else if(state.waveType==='attack')tickAttack(live);
+    else if(state.waveType==='boss')tickBoss(live);
     const nowDead=state.myDonuts.filter(d=>d.currentHP<=0);
     state.deadDonuts.push(...nowDead);
     state.myDonuts=state.myDonuts.filter(d=>d.currentHP>0);
@@ -1050,7 +1122,7 @@ function render3D(){
 function resetGame(){
   Object.assign(state,{coins:30,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonut:null,waveHistory:[],lives:3});
   visitedShopThisWave=false;
-  spawnIdx=0;spawnBlocks();DonutAudio.stopMusic();
+  spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
   document.getElementById('victory-overlay').classList.remove('show');
   logMsg('New game! Wave 1 = DEFEND. Wave 2 = ATTACK. Alternates!','info');
