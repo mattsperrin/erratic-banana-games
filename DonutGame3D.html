@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Donut Game 3D - Noah's Edition</title>
+<title>Donut Game 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -196,6 +196,10 @@
   #gameover-overlay.show { display: block; }
   #gameover-overlay .go-title { font-size: 2.2em; font-weight: bold; color: #ff4444; text-shadow: 0 0 20px #000; }
   #gameover-overlay .go-sub { font-size: 1em; color: #fff; margin-top: 8px; text-shadow: 0 0 10px #000; }
+  #victory-overlay { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; z-index:10; }
+  #victory-overlay.show { display:block; }
+  #victory-overlay .vic-title { font-size:2.4em; font-weight:bold; color:#FFD700; text-shadow:0 0 24px #f4a43a,0 0 8px #000; }
+  #victory-overlay .vic-sub { font-size:1em; color:#fff; margin-top:8px; text-shadow:0 0 10px #000; }
   #donut-label {
     display: none; position: absolute; pointer-events: none;
     background: rgba(0,0,0,0.75); color: #f4d03f; font-size: 0.8em;
@@ -237,6 +241,7 @@
   <div id="wave-banner"></div>
   <div id="donut-label"></div>
   <div id="gameover-overlay"><div class="go-title">💀 GAME OVER</div><div class="go-sub">Click "Next Wave" to restart</div></div>
+  <div id="victory-overlay"><div class="vic-title">🏆 YOU WIN!</div><div class="vic-sub">All 30 waves defeated!<br>Click "Next Wave" to play again.</div></div>
   <div class="base-label" id="label-player" style="color:#4CAF50">YOUR BASE</div>
   <div class="base-label" id="label-enemy" style="color:#cc0000">EVIL BASE</div>
 </div>
@@ -734,12 +739,18 @@ function mkEnemies(wave,waveType){
   if(waveType==='defend')lastDefendCount=count;
   const em=Math.pow(1.1,Math.floor(wave/6))*(waveType==='attack'?0.9:1.0);
   const sm=difficulty==='easy'?0.8:difficulty==='hard'?1.2:1.0;
-  const tiers=[
-    {name:'Tiny Evil', hp:Math.round((20+wave*5)*em),  dmg:(4+wave*1.2)*em,  speed:(0.675+wave*0.045)*sm,range:60,  reward:4, color:'#ff5555',r:14},
-    {name:'Mean Evil', hp:Math.round((40+wave*9)*em),  dmg:(8+wave*2)*em,    speed:(0.54+wave*0.0375)*sm,range:85,  reward:8, color:'#cc2222',r:18},
-    {name:'Big Evil',  hp:Math.round((80+wave*15)*em), dmg:(15+wave*3)*em,   speed:(0.42+wave*0.027)*sm, range:110, reward:15,color:'#990000',r:24},
-    {name:'Mega Evil', hp:Math.round((150+wave*25)*em),dmg:(28+wave*4)*em,   speed:0.33*sm,             range:140, reward:28,color:'#660000',r:30},
+  const allTiers=[
+    {name:'Tiny Evil', unlockWave:1,  hp:Math.round((20+wave*5)*em),    dmg:(4+wave*1.2)*em,  speed:(0.675+wave*0.045)*sm,range:60,  reward:4,   color:'#ff5555',r:14},
+    {name:'Mean Evil', unlockWave:1,  hp:Math.round((40+wave*9)*em),    dmg:(8+wave*2)*em,    speed:(0.54+wave*0.0375)*sm,range:85,  reward:8,   color:'#cc2222',r:18},
+    {name:'Big Evil',  unlockWave:1,  hp:Math.round((80+wave*15)*em),   dmg:(15+wave*3)*em,   speed:(0.42+wave*0.027)*sm, range:110, reward:15,  color:'#990000',r:24},
+    {name:'Mega Evil', unlockWave:1,  hp:Math.round((150+wave*25)*em),  dmg:(28+wave*4)*em,   speed:0.33*sm,              range:140, reward:28,  color:'#660000',r:30},
+    {name:'Dark Evil', unlockWave:6,  hp:Math.round((300+wave*40)*em),  dmg:(55+wave*6)*em,   speed:0.26*sm,              range:130, reward:50,  color:'#4B0082',r:32},
+    {name:'Vile Evil', unlockWave:12, hp:Math.round((550+wave*65)*em),  dmg:(95+wave*10)*em,  speed:0.28*sm,              range:140, reward:80,  color:'#8B0000',r:35},
+    {name:'Dread Evil',unlockWave:18, hp:Math.round((950+wave*100)*em), dmg:(160+wave*15)*em, speed:0.30*sm,              range:150, reward:120, color:'#006633',r:38},
+    {name:'Infernal',  unlockWave:24, hp:Math.round((1600+wave*150)*em),dmg:(260+wave*22)*em, speed:0.32*sm,              range:160, reward:180, color:'#CC4400',r:41},
+    {name:'Doom Evil', unlockWave:30, hp:Math.round((2800+wave*220)*em),dmg:(420+wave*32)*em, speed:0.35*sm,              range:175, reward:250, color:'#111111',r:44},
   ];
+  const tiers=allTiers.filter(t=>wave>=t.unlockWave);
   return Array.from({length:count},(_,i)=>{
     const tier=tiers[Math.min(Math.floor(i/3+(wave>3?1:0)),tiers.length-1)];
     const aBase=-Math.PI*0.5,aRange=waveType==='defend'?Math.PI:ENEMY_BASE_ARC*0.8;
@@ -795,6 +806,8 @@ function doStartWave(){
   resetDonutsToBase();
   state.enemies=mkEnemies(state.wave,state.waveType);
   if((state.wave-1)%6===0)spawnBlocks();DonutAudio.startMusic();
+  const newTierNames={6:'Dark Evil',12:'Vile Evil',18:'Dread Evil',24:'Infernal',30:'Doom Evil'};
+  if(newTierNames[state.wave])logMsg(`☠️ New enemy type unlocked: ${newTierNames[state.wave]}!`,'bad');
   if(state.waveType==='defend'){
     DonutAudio.sfxWaveStart();showBanner(`🛡️ Wave ${state.wave} — DEFEND!`);
     logMsg(`Wave ${state.wave}: DEFEND! ${state.enemies.length} evil donuts incoming!`,'bad');
@@ -928,7 +941,13 @@ function tickAttack(live){
     state.projectiles=[];state.evilProjectiles=[];resetDonutsToBase();reviveDeadDonuts();DonutAudio.sfxWaveWin();
     state.waveHistory.push({wave:state.wave,type:'Attack',result:'Victory',detail:`+${b} coins`});
     visitedShopThisWave=false;
-    logMsg(`⚔️ Attack success! +${b} coins. All donuts back at base!`,'good');showBanner(`✅ Attack Success!`);updateHUD();
+    if(state.wave>=30){
+      state.gameOver=true;DonutAudio.stopMusic();
+      logMsg('🏆 YOU WIN! All 30 waves defeated!','good');
+      document.getElementById('victory-overlay').classList.add('show');updateHUD();
+    }else{
+      logMsg(`⚔️ Attack success! +${b} coins. All donuts back at base!`,'good');showBanner(`✅ Attack Success!`);updateHUD();
+    }
   }else if(state.myDonuts.length===0){
     loseLife();updateHUD();
   }
@@ -1033,6 +1052,7 @@ function resetGame(){
   visitedShopThisWave=false;
   spawnIdx=0;spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
+  document.getElementById('victory-overlay').classList.remove('show');
   logMsg('New game! Wave 1 = DEFEND. Wave 2 = ATTACK. Alternates!','info');
   showBanner('🍩 NEW GAME!');updateHUD();
 }
@@ -1040,7 +1060,7 @@ function toggleMute(){const m=DonutAudio.toggleMute();document.getElementById('m
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function gameLoop(){update();render3D();requestAnimationFrame(gameLoop);}
-logMsg('Welcome Noah! 🍩  Wave 1 = DEFEND your base. Wave 2 = ATTACK theirs. Alternates!','info');
+logMsg('🍩 Wave 1 = DEFEND your base. Wave 2 = ATTACK theirs. Alternates! Survive all 30 waves to win!','info');
 updateHUD();
 gameLoop();
 </script>
