@@ -142,6 +142,11 @@
   }
   .buy-btn:hover:not(:disabled) { background: #f4d03f; }
   .buy-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+  .sell-btn {
+    background: #c0392b; color: #fff; border: none; border-radius: 8px;
+    padding: 6px 14px; font-weight: bold; cursor: pointer; font-size: 0.9em;
+  }
+  .sell-btn:hover { background: #e74c3c; }
   #close-shop {
     display: block; margin: 18px auto 0; background: #333; color: #fff;
     border: none; border-radius: 10px; padding: 8px 28px; font-size: 1em; cursor: pointer;
@@ -225,7 +230,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.4</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.5</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -657,7 +662,8 @@ function openShop(page){
     const owned=[...state.myDonuts,...state.deadDonuts].filter(d=>d.id===type.id).length;
     const ownedHtml=owned>0?`<div class="shop-item-owned">Owned: ${owned}</div>`:'';
     const row=document.createElement('div');row.className='shop-item';
-    row.innerHTML=`<div class="shop-item-left"><canvas width="52" height="52" id="prev-${type.id}"></canvas><div class="shop-item-info"><div class="shop-item-name">${type.name}</div><div class="shop-item-stat">⚔️ ${type.dmg} &nbsp;❤️ ${type.hp} HP &nbsp;🎯 ${type.range}</div>${ownedHtml}</div></div><div style="display:flex;align-items:center;gap:10px"><div class="shop-item-price">💰 ${type.cost}</div><button class="buy-btn" ${ok?'':'disabled'} onclick="buyFromShop('${type.id}')">Buy</button></div>`;
+    const sellHtml=owned>0?`<button class="sell-btn" onclick="sellFromShop('${type.id}')">Sell 💰 ${Math.floor(type.cost*0.75)}</button>`:'';
+    row.innerHTML=`<div class="shop-item-left"><canvas width="52" height="52" id="prev-${type.id}"></canvas><div class="shop-item-info"><div class="shop-item-name">${type.name}</div><div class="shop-item-stat">⚔️ ${type.dmg} &nbsp;❤️ ${type.hp} HP &nbsp;🎯 ${type.range}</div>${ownedHtml}</div></div><div style="display:flex;align-items:center;gap:10px"><div class="shop-item-price">💰 ${type.cost}</div><button class="buy-btn" ${ok?'':'disabled'} onclick="buyFromShop('${type.id}')">Buy</button>${sellHtml}</div>`;
     box.appendChild(row);
     requestAnimationFrame(()=>{
       const pc=document.getElementById(`prev-${type.id}`);if(!pc)return;
@@ -708,6 +714,16 @@ document.addEventListener('click',()=>{
   if(_toastOpen){document.getElementById('donut-toast').classList.remove('show');_toastOpen=false;}
 });
 function buyFromShop(id){const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();}
+function sellFromShop(id){
+  const t=DONUT_TYPES.find(d=>d.id===id);if(!t)return;
+  let idx=state.myDonuts.findIndex(d=>d.id===id);
+  if(idx>=0){state.myDonuts.splice(idx,1);}
+  else{idx=state.deadDonuts.findIndex(d=>d.id===id);if(idx>=0)state.deadDonuts.splice(idx,1);}
+  if(idx<0){logMsg('No '+t.name+' to sell!','bad');return;}
+  const refund=Math.floor(t.cost*0.75);
+  state.coins+=refund;DonutAudio.sfxCoin();
+  logMsg(`Sold ${t.name} for 💰 ${refund}!`,'good');updateHUD();openShop();
+}
 function closeShop(){document.getElementById('shop-overlay').classList.remove('open');}
 function shopPrev(){if(shopPage>0)openShop(shopPage-1);}
 function shopNext(){if(shopPage<Math.ceil(DONUT_TYPES.length/SHOP_PAGE_SIZE)-1)openShop(shopPage+1);}
@@ -820,7 +836,7 @@ function mkBoss(wave){
   const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
   const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
   const r=55+tier*8;
-  const diffBossScale=difficulty==='easy'?1.1:difficulty==='medium'?1.25:1.5;
+  const diffBossScale=difficulty==='easy'?1.32:difficulty==='medium'?1.5:1.8;
   const bossScale=(wave===10?0.9:1.0)*diffBossScale;
   const hp=Math.round((3000+wave*800)*em*bossScale);
   return [{
@@ -930,7 +946,7 @@ function doStartWave(){
     DonutAudio.sfxWaveStart();showBanner(`🛡️ Wave ${state.wave} — DEFEND!`);
     logMsg(`Wave ${state.wave}: DEFEND! ${state.enemies.length} evil donuts incoming!`,'bad');
   }else{
-    state.enemyMaxBaseHP=60+state.wave*20;state.enemyBaseHP=state.enemyMaxBaseHP;
+    state.enemyMaxBaseHP=60+state.wave*25;state.enemyBaseHP=state.enemyMaxBaseHP;
     DonutAudio.sfxAttackStart();showBanner(`⚔️ Wave ${state.wave} — ATTACK!`);
     logMsg(`Wave ${state.wave}: ATTACK! Destroy the evil base!`,'info');
   }
