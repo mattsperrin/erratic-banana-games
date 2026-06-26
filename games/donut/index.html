@@ -230,7 +230,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT <span onclick="godCheat()" style="cursor:pointer;user-select:none">G</span>AME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.8</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.9</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -271,6 +271,7 @@
   <button class="game-btn" id="btn-shop" onclick="openShop(0)">🏪 Shop</button>
   <button class="game-btn" id="btn-next-wave" onclick="nextWave()">⚔️ Next Wave</button>
   <button class="game-btn" id="diff-btn" onclick="cycleDifficulty()">🎯 Medium</button>
+  <button class="game-btn" onclick="resetGame()" style="background:#333;color:#aaa;border:1px solid #555;">↺ Restart</button>
 </div>
 
 <div id="shop-overlay">
@@ -726,6 +727,15 @@ function buyFromShop(id){
   if(state.myDonuts.length+state.deadDonuts.length>=20){logMsg('Team full (20 max)! Sell a weaker donut first.','bad');return;}
   state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();
 }
+function checkDeadlock(){
+  if(state.myDonuts.length+state.deadDonuts.length===0&&state.coins<DONUT_TYPES[0].cost){
+    closeShop();
+    state.gameOver=true;DonutAudio.sfxGameOver();DonutAudio.stopMusic();
+    logMsg('💀 No donuts and no coins — Game Over!','bad');
+    document.getElementById('gameover-overlay').classList.add('show');
+    updateHUD();return true;
+  }return false;
+}
 function sellFromShop(id){
   const t=DONUT_TYPES.find(d=>d.id===id);if(!t)return;
   let idx=state.myDonuts.findIndex(d=>d.id===id);
@@ -734,7 +744,8 @@ function sellFromShop(id){
   if(idx<0){logMsg('No '+t.name+' to sell!','bad');return;}
   const refund=Math.floor(t.cost*0.75);
   state.coins+=refund;DonutAudio.sfxCoin();
-  logMsg(`Sold ${t.name} for 💰 ${refund}!`,'good');updateHUD();openShop();
+  logMsg(`Sold ${t.name} for 💰 ${refund}!`,'good');updateHUD();
+  if(!checkDeadlock())openShop();
 }
 function closeShop(){document.getElementById('shop-overlay').classList.remove('open');}
 function shopPrev(){if(shopPage>0)openShop(shopPage-1);}
