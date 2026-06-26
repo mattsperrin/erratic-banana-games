@@ -229,8 +229,8 @@
 </style>
 </head>
 <body>
-<div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.5</div>
+<div id="title">🍩 DONUT <span onclick="godCheat()" style="cursor:pointer;user-select:none">G</span>AME 3D 🍩</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.6</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -648,7 +648,7 @@ function openBlock(b){
 let shopPage=0;const SHOP_PAGE_SIZE=6;
 function openShop(page){
   if(state.waveActive){logMsg("Can't visit the shop during a wave!",'bad');return;}
-  visitedShopThisWave=true;
+  visitedShopThisWave=true;shopEverVisited=true;
   if(typeof page==='number')shopPage=page;
   const totalPages=Math.ceil(DONUT_TYPES.length/SHOP_PAGE_SIZE);
   document.getElementById('shop-coin-count').textContent=state.coins;
@@ -713,6 +713,13 @@ document.addEventListener('click',()=>{
   if(_waveToastOpen){document.getElementById('wave-toast').classList.remove('show');_waveToastOpen=false;}
   if(_toastOpen){document.getElementById('donut-toast').classList.remove('show');_toastOpen=false;}
 });
+function godCheat(){
+  if(shopEverVisited){logMsg('Cheat unavailable after visiting the shop.','bad');return;}
+  if(godCheatCount>=3){logMsg('God limit reached!','bad');return;}
+  godCheatCount++;
+  const p=defaultPos();state.myDonuts.push(mkDonut('god',p.x,p.y));
+  logMsg('✨ God Donut! ('+godCheatCount+'/3)','good');updateHUD();
+}
 function buyFromShop(id){const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();}
 function sellFromShop(id){
   const t=DONUT_TYPES.find(d=>d.id===id);if(!t)return;
@@ -815,7 +822,8 @@ function mkEnemies(wave,waveType){
     const tier=tiers[Math.min(Math.floor(i/3+(wave>3?1:0)),tiers.length-1)];
     const aBase=-Math.PI*0.5,aRange=waveType==='defend'?Math.PI:ENEMY_BASE_ARC*0.8;
     const a=aBase+(Math.random()-0.5)*aRange;
-    return{...tier,maxHP:tier.hp,active:false,attackCooldown:0,spawnDelay:i*5,x:CX+Math.cos(a)*(R-22),y:CY+Math.sin(a)*(R-22)};
+    const sd=wave<=10?5:wave<=20?3:2;
+    return{...tier,maxHP:tier.hp,active:false,attackCooldown:0,spawnDelay:i*sd,x:CX+Math.cos(a)*(R-22),y:CY+Math.sin(a)*(R-22)};
   });
 }
 let difficulty='medium';
@@ -828,6 +836,7 @@ function cycleDifficulty(){
 }
 
 let spawnIdx=0,lastDefendCount=3,visitedShopThisWave=false,nextNonBossType='defend';
+let shopEverVisited=false,godCheatCount=0;
 
 function mkBoss(wave){
   const em=Math.pow(1.1,Math.floor(wave/8));
@@ -1186,7 +1195,7 @@ function render3D(){
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetGame(){
   Object.assign(state,{coins:difficulty==='hard'?40:50,wave:0,baseHP:100,maxBaseHP:100,enemyBaseHP:0,enemyMaxBaseHP:0,waveType:null,myDonuts:[],deadDonuts:[],enemies:[],projectiles:[],evilProjectiles:[],blocks:[],particles:[],floatingTexts:[],waveActive:false,gameOver:false,selectedDonuts:[],waveHistory:[],lives:3});
-  visitedShopThisWave=false;
+  visitedShopThisWave=false;shopEverVisited=false;godCheatCount=0;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
   document.getElementById('victory-overlay').classList.remove('show');
