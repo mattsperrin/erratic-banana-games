@@ -230,7 +230,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT <span onclick="godCheat()" style="cursor:pointer;user-select:none">G</span>AME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.7</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.8</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -365,11 +365,11 @@ const DONUT_TYPES=[
   {id:'water',   name:'Water Donut',     cost:350,   dmg:282,  hp:471,   range:106, speed:1.5, doughColor:'#4A90D9',frostingColor:'#87CEEB',outerR:25,innerR:10},
   {id:'lava',    name:'Lava Donut',      cost:500,   dmg:424,  hp:708,   range:115, speed:1.4, doughColor:'#8B1A00',frostingColor:'#FF4500',outerR:26,innerR:11},
   {id:'city',    name:'City Donut',      cost:780,   dmg:613,  hp:1037,  range:125, speed:1.5, doughColor:'#708090',frostingColor:'#A0A0A0',outerR:27,innerR:11},
-  {id:'earth',   name:'Earth Donut',     cost:1000,  dmg:849,  hp:1508,  range:133, speed:1.6, doughColor:'#4A2C0A',frostingColor:'#228B22',outerR:28,innerR:12},
-  {id:'planet',  name:'Planet Donut',    cost:2500,  dmg:1322, hp:2357,  range:146, speed:1.6, doughColor:'#1A0033',frostingColor:'#6A0DAD',outerR:30,innerR:12},
-  {id:'space',   name:'Space Donut',     cost:5000,  dmg:2075, hp:3772,  range:161, speed:1.9, doughColor:'#000011',frostingColor:'#191970',outerR:32,innerR:13},
-  {id:'devil',   name:'Devil Donut',     cost:7500,  dmg:3301, hp:6130,  range:173, speed:2.1, doughColor:'#1A0000',frostingColor:'#8B0000',outerR:34,innerR:14},
-  {id:'god',     name:'God Donut',       cost:10000, dmg:7545, hp:14146, range:199, speed:2.3, doughColor:'#F5F5DC',frostingColor:'#FFD700',outerR:36,innerR:15},
+  {id:'earth',   name:'Earth Donut',     cost:1000,  dmg:764,  hp:1357,  range:120, speed:1.44,doughColor:'#4A2C0A',frostingColor:'#228B22',outerR:28,innerR:12},
+  {id:'planet',  name:'Planet Donut',    cost:2500,  dmg:1190, hp:2121,  range:131, speed:1.44,doughColor:'#1A0033',frostingColor:'#6A0DAD',outerR:30,innerR:12},
+  {id:'space',   name:'Space Donut',     cost:5000,  dmg:1868, hp:3395,  range:145, speed:1.71,doughColor:'#000011',frostingColor:'#191970',outerR:32,innerR:13},
+  {id:'devil',   name:'Devil Donut',     cost:7500,  dmg:2971, hp:5517,  range:156, speed:1.89,doughColor:'#1A0000',frostingColor:'#8B0000',outerR:34,innerR:14},
+  {id:'god',     name:'God Donut',       cost:10000, dmg:6791, hp:12731, range:179, speed:2.07,doughColor:'#F5F5DC',frostingColor:'#FFD700',outerR:36,innerR:15},
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -723,11 +723,16 @@ document.addEventListener('click',()=>{
 });
 function godCheat(){
   if(shopEverVisited||godCheatCount>=3)return;
+  if(state.myDonuts.length+state.deadDonuts.length>=20)return;
   godCheatCount++;
   const p=defaultPos();state.myDonuts.push(mkDonut('god',p.x,p.y));
   logMsg('✨ God Donut!','good');updateHUD();
 }
-function buyFromShop(id){const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();}
+function buyFromShop(id){
+  const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}
+  if(state.myDonuts.length+state.deadDonuts.length>=20){logMsg('Team full (20 max)! Sell a weaker donut first.','bad');return;}
+  state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();
+}
 function sellFromShop(id){
   const t=DONUT_TYPES.find(d=>d.id===id);if(!t)return;
   let idx=state.myDonuts.findIndex(d=>d.id===id);
@@ -853,7 +858,7 @@ function mkBoss(wave){
   const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
   const r=55+tier*8;
   const diffBossScale=difficulty==='easy'?1.32:difficulty==='medium'?1.5:1.8;
-  const bossScale=(wave===10?0.9:1.0)*diffBossScale;
+  const bossScale=(wave===10?0.9:wave===30?1.05:1.0)*diffBossScale;
   const hp=Math.round((3000+wave*800)*em*bossScale);
   return [{
     name:names[wave]||'Boss Evil',hp,maxHP:hp,
