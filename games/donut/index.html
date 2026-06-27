@@ -66,17 +66,19 @@
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.85);
     z-index: 100;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    overflow-y: auto;
+    padding: 16px;
   }
   #shop-overlay.open { display: flex; }
   #shop-panel {
     background: #2d1200;
     border: 3px solid #f4a43a;
     border-radius: 20px;
-    padding: 30px;
-    min-width: 380px;
-    max-width: 90vw;
+    padding: 24px;
+    width: min(440px, 100%);
+    margin: auto;
   }
   #shop-panel h2 { text-align: center; color: #f4a43a; font-size: 1.8em; margin-bottom: 6px; }
   #shop-coins { text-align: center; color: #f4d03f; font-size: 1.1em; margin-bottom: 18px; }
@@ -249,10 +251,11 @@
   #shop-prompt.show { display: flex; }
   #shop-prompt-box {
     background: #1a0900; border: 2px solid #f4a43a; border-radius: 14px;
-    padding: 24px 32px; text-align: center; color: #fff; max-width: 320px;
+    padding: 24px; text-align: center; color: #fff;
+    width: min(320px, calc(100vw - 32px));
   }
   #shop-prompt-box p { margin: 0 0 18px; font-size: 1.05em; line-height: 1.4; }
-  #shop-prompt-box button { margin: 0 8px; }
+  #shop-prompt-box button { margin: 6px 8px; }
 </style>
 </head>
 <body>
