@@ -50,6 +50,7 @@
     width: 100%;
     height: 100%;
   }
+  .shop-item-left canvas { width: 36px; height: 36px; flex-shrink: 0; }
   .base-label {
     position: absolute;
     font-size: 12px;
@@ -725,7 +726,7 @@ function openShop(page){
     const ownedHtml=owned>0?`<div class="shop-item-owned">Owned: ${owned}</div>`:'';
     const row=document.createElement('div');row.className='shop-item';
     const sellHtml=owned>0?`<button class="sell-btn" onclick="sellFromShop('${type.id}')">Sell 💰 ${Math.floor(type.cost*0.75)}</button>`:'';
-    row.innerHTML=`<div class="shop-item-left"><canvas width="36" height="36" id="prev-${type.id}"></canvas><div class="shop-item-info"><div class="shop-item-name">${type.name}</div><div class="shop-item-stat">⚔️ ${type.dmg} &nbsp;❤️ ${type.hp} HP &nbsp;🎯 ${type.range}</div>${ownedHtml}</div></div><div style="display:flex;align-items:center;gap:8px"><div class="shop-item-price">💰 ${type.cost}</div><button class="buy-btn" ${ok?'':'disabled'} onclick="buyFromShop('${type.id}')">Buy</button>${sellHtml}</div>`;
+    row.innerHTML=`<div class="shop-item-left"><canvas width="36" height="36" id="prev-${type.id}"></canvas><div class="shop-item-info"><div class="shop-item-name">${type.name}</div><div class="shop-item-stat" style="white-space:nowrap">⚔️${type.dmg} ❤️${type.hp} 🎯${type.range}</div>${ownedHtml}</div></div><div style="display:flex;align-items:center;gap:8px"><div class="shop-item-price">💰 ${type.cost}</div><button class="buy-btn" ${ok?'':'disabled'} onclick="buyFromShop('${type.id}')">Buy</button>${sellHtml}</div>`;
     box.appendChild(row);
     requestAnimationFrame(()=>{
       const pc=document.getElementById(`prev-${type.id}`);if(!pc)return;
