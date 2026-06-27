@@ -167,6 +167,24 @@
   }
   #cam-toast.show { opacity: 1; }
 
+  /* ── Sound toggle (always visible) ─────────────────────────────────────── */
+  #sound-btn {
+    position: fixed; bottom: 12px; left: 12px; z-index: 23;
+    width: 40px; height: 40px; font-size: 1.05em; cursor: pointer;
+    background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.12);
+    color: #f0e6d3; border-radius: 10px; backdrop-filter: blur(4px);
+  }
+  #sound-btn:hover { background: rgba(244,164,58,0.35); }
+  #sound-btn.off { opacity: 0.5; }
+
+  /* ── Quick wardrobe overlay ────────────────────────────────────────────── */
+  #wardrobe {
+    position: fixed; inset: 0; z-index: 22; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(8,8,14,0.72); backdrop-filter: blur(3px);
+  }
+  #wardrobe.show { display: flex; }
+
   @media (max-width: 560px) {
     #level-grid { grid-template-columns: repeat(4, 1fr); }
     h1 { font-size: 2em; }
@@ -234,6 +252,7 @@
     <span>💀 <span id="hud-attempts">0</span></span>
   </div>
   <div id="hud-right">
+    <button class="icon-btn" id="hud-wardrobe" title="Wardrobe — change armour (Tab)">🛡</button>
     <button class="icon-btn" id="hud-cam" title="Toggle camera (C)">👁</button>
     <button class="icon-btn" id="hud-restart" title="Restart (R)">⟳</button>
     <button class="icon-btn" id="hud-exit" title="Levels (Esc)">≡</button>
@@ -242,6 +261,20 @@
 
 <div id="controls-hint">
   <b>↑↓</b> move &nbsp; <b>←→</b> turn &nbsp; <b>Space</b> jump &nbsp; <b>[ ]</b> tilt &nbsp; <b>C</b> view &nbsp; <b>R</b> restart
+</div>
+
+<button id="sound-btn" title="Sound on/off">🔊</button>
+
+<!-- QUICK WARDROBE (in-level armour change) -->
+<div id="wardrobe">
+  <div class="panel" style="max-width:380px; text-align:center;">
+    <h2>Wardrobe</h2>
+    <div class="label">Wear armour</div>
+    <div class="swatches" id="wardrobe-swatches"></div>
+    <div class="btn-row" style="margin-top:20px;">
+      <button class="btn" id="wardrobe-done">Done</button>
+    </div>
+  </div>
 </div>
 
 <div id="cam-toast"></div>
@@ -306,6 +339,7 @@ const JUMP_V       = 12.0;   // first jump up-velocity
 const DJUMP_V      = 11.0;   // double jump up-velocity
 const PFR          = 0.34;   // player footprint half-width
 const EYE          = 1.45;   // first-person eye height
+const MIN_GAP      = 2.0;    // minimum empty space between pad edges (~1 block)
 const TOWER_H      = 9.0;    // height of the inter-level ladder tower
 const CLIMB_SPEED  = 6.0;    // ladder climb speed (units/sec)
 const CAM_BOOM     = 7.8;    // third-person camera boom length
@@ -362,6 +396,7 @@ const defaultSave = () => ({
   color: '#5ec8f0',                     // body colour
   equipped: 0,                          // 0 = none, else level number 1..20
   camPitch: 0.72,                       // third-person camera angle (radians)
+  muted: false,                         // sound on/off
 });
 let save = loadSave();
 function loadSave(){
@@ -376,6 +411,83 @@ function loadSave(){
   } catch(e){ return defaultSave(); }
 }
 function persist(){ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+
+// ════════════════════════════════════════════════════════════════════════════
+// SOUND  (all synthesised with the Web Audio API — no asset files)
+// ════════════════════════════════════════════════════════════════════════════
+const Sound = (function(){
+  let ctx, master, musicGain, sfxGain, musicTimer = null, musicOn = false;
+  function ensure(){
+    if (ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createGain();   master.gain.value = save.muted ? 0 : 1;  master.connect(ctx.destination);
+    musicGain = ctx.createGain(); musicGain.gain.value = 0.16;            musicGain.connect(master);
+    sfxGain = ctx.createGain();   sfxGain.gain.value = 0.55;              sfxGain.connect(master);
+  }
+  function resume(){ ensure(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
+
+  // one-shot note with an envelope
+  function blip(freq, t, dur, type, gain, dest){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(dest || sfxGain); o.start(t); o.stop(t+dur+0.02);
+    return o;
+  }
+  // pitch-sweep (for jumps)
+  function sweep(f0, f1, dur, type, gain){
+    if (!ctx) return; const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t+dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+dur+0.02);
+  }
+
+  // ── looping background music: a cheerful pentatonic bounce ──
+  const A=220, B=246.94, D=293.66, E=329.63, G=392, A2=440, B2=493.88, D2=587.33, E2=659.25;
+  const MELODY = [E2,0,D2,0, B2,0,A2,0, G,0,A2,0, B2,0,0,0,
+                  D2,0,B2,0, A2,0,G,0,  E,0,G,0,  A2,0,0,0];
+  const BASS   = [A,0,0,0, G,0,0,0, E,0,0,0, A,0,0,0,
+                  D,0,0,0, E,0,0,0, A,0,0,0, E,0,0,0];
+  let step = 0, nextT = 0;
+  const STEP_DUR = 0.16;
+  function schedule(){
+    if (!ctx) return;
+    while (nextT < ctx.currentTime + 0.25){
+      const m = MELODY[step % MELODY.length];
+      if (m) blip(m, nextT, 0.16, 'triangle', 0.5, musicGain);
+      const b = BASS[step % BASS.length];
+      if (b) blip(b, nextT, 0.26, 'sine', 0.7, musicGain);
+      nextT += STEP_DUR; step++;
+    }
+  }
+  function startMusic(){
+    resume();
+    if (!ctx || musicOn) return;
+    musicOn = true; nextT = ctx.currentTime + 0.08;
+    musicTimer = setInterval(schedule, 60);
+  }
+
+  return {
+    resume, startMusic,
+    jump(){ sweep(300, 620, 0.13, 'square', 0.5); },
+    double(){ sweep(520, 980, 0.15, 'square', 0.5); },
+    fall(){ sweep(380, 90, 0.45, 'sawtooth', 0.45); },
+    victory(){
+      if (!ctx) return; const t = ctx.currentTime;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f,i) =>
+        blip(f, t + i*0.13, 0.34, 'triangle', 0.6));
+    },
+    setMuted(m){ ensure(); if (master) master.gain.value = m ? 0 : 1; },
+  };
+})();
 
 // ════════════════════════════════════════════════════════════════════════════
 // THREE.JS SETUP
@@ -469,17 +581,24 @@ function blockTexture(hex){
   return t;
 }
 
-// ── Text sprite (START / 🍌) ────────────────────────────────────────────────
-function textSprite(txt, color){
-  const c = document.createElement('canvas'); c.width=256; c.height=128;
+// ── Text sprite (auto-fits its canvas to the text so nothing gets clipped) ──
+function textSprite(txt, color, worldHeight){
+  worldHeight = worldHeight || 1.2;
+  const fontPx = 80, padX = 30, padY = 22;
+  const meas = document.createElement('canvas').getContext('2d');
+  meas.font = 'bold '+fontPx+'px Segoe UI, sans-serif';
+  const w = Math.ceil(meas.measureText(txt).width) + padX*2;
+  const h = fontPx + padY*2;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d');
-  ctx.font = 'bold 70px Segoe UI, sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.strokeText(txt,128,64);
-  ctx.fillStyle=color||'#fff'; ctx.fillText(txt,128,64);
+  ctx.font = 'bold '+fontPx+'px Segoe UI, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 10; ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(txt, w/2, h/2);
+  ctx.fillStyle = color || '#fff'; ctx.fillText(txt, w/2, h/2);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false }));
-  sp.scale.set(3,1.5,1);
+  sp.scale.set(worldHeight * (w/h), worldHeight, 1);
   return sp;
 }
 
@@ -568,7 +687,7 @@ function generateLevel(level, origin){      // level: 1..20
 
   const blocks = [];
   // start pad — generous & safe
-  blocks.push({ x:origin.x, z:origin.z, top:origin.y, size:Math.max(topSize,3.2), isStart:true });
+  blocks.push({ x:origin.x, z:origin.z, top:origin.y, size:Math.max(topSize,2.8), isStart:true });
 
   let heading = 0;            // 0 = +Z forward
   let cx = origin.x, cz = origin.z, cy = origin.y;
@@ -590,7 +709,13 @@ function generateLevel(level, origin){      // level: 1..20
       dist = gapFactor * reachSingle(dy);
     }
     const sz = clamp(topSize * lerp(1.0, 0.85, rng()), PFR*2 + 0.35, 4);
-    dist = Math.max(dist, sz*0.6 + 1.2); // never overlap previous pad
+    // Guarantee a real gap (≥ MIN_GAP of empty space between pad edges) so you
+    // never fall through a sliver-thin crack — but never beyond what's jumpable.
+    const prevHalf = blocks[blocks.length-1].size/2;
+    const minCenter = MIN_GAP + prevHalf + sz/2;
+    const maxCenter = (requiresDouble ? reachDouble(dy) : reachSingle(dy)) * 0.92;
+    dist = Math.max(dist, minCenter);
+    if (dist > maxCenter) dist = maxCenter;
 
     // Place block, retrying with a straighter heading if it would overlap an
     // existing pad. The heading is kept within a forward cone so the course
@@ -683,8 +808,8 @@ function buildLevelMeshes(L){
     levelGroup.add(mesh);
 
     if (b.isStart){
-      const s = textSprite(L.level===1 ? 'START' : 'LEVEL '+L.level, '#f9e04b');
-      s.position.set(b.x, b.top+1.3, b.z); levelGroup.add(s);
+      const s = textSprite(L.level===1 ? 'START' : 'LEVEL '+L.level, '#f9e04b', 1.0);
+      s.position.set(b.x, b.top+2.4, b.z); levelGroup.add(s);
       // the tower you climbed up out of, descending below the start pad
       buildTower(levelGroup, b.x, b.z, b.top - TOWER_H, TOWER_H, hex);
     }
@@ -701,10 +826,10 @@ function buildLevelMeshes(L){
       buildTower(levelGroup, b.x, b.z, b.top, TOWER_H, hex);
       const ladderTopY = b.top + TOWER_H;
       const isLast = (L.level === TOTAL_LEVELS);
-      const ban = textSprite(isLast ? '🏆' : '🍌', '#fff');
-      ban.position.set(b.x, ladderTopY+1.4, b.z); ban.scale.set(2,2,1); levelGroup.add(ban);
-      const climbLbl = textSprite('CLIMB ↑', '#f9e04b');
-      climbLbl.position.set(b.x, b.top+0.9, b.z); climbLbl.scale.set(2.4,1.2,1); levelGroup.add(climbLbl);
+      const ban = textSprite(isLast ? '🏆' : '🍌', '#fff', 2.0);
+      ban.position.set(b.x, ladderTopY+1.6, b.z); levelGroup.add(ban);
+      const climbLbl = textSprite('CLIMB ↑', '#f9e04b', 1.0);
+      climbLbl.position.set(b.x, b.top+0.9, b.z); levelGroup.add(climbLbl);
       // beacon column rising from the top of the tower
       const beam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.5,0.5,40,12,1,true),
@@ -743,6 +868,7 @@ let state = 'menu';              // menu | char | select | play
 let curLevel = null;             // generated level object
 let camMode = 'third';           // third | first
 let camPitch = save.camPitch;    // third-person camera angle (radians)
+let paused = false;              // wardrobe open → game paused
 
 // player kinematics
 const pos = new THREE.Vector3();
@@ -755,14 +881,19 @@ const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 
 window.addEventListener('keydown', e => {
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Tab'].includes(e.key)) e.preventDefault();
   if (state !== 'play') return;
   const k = e.key.toLowerCase();
+  if (paused){                       // wardrobe open
+    if (k === 'tab' || e.key === 'Escape') closeWardrobe();
+    return;
+  }
   if (e.repeat){ keys[k]=true; return; }
   keys[k] = true;
   if (e.key === ' ') tryJump();
   if (k === 'c') toggleCam();
   if (k === 'r') startLevel(curLevel.level);
+  if (k === 'tab') openWardrobe();
   if (e.key === 'Escape') gotoSelect();
 });
 window.addEventListener('keyup', e => {
@@ -773,8 +904,8 @@ window.addEventListener('keyup', e => {
 
 function tryJump(){
   if (failing || cleared) return;
-  if (grounded){ vy = JUMP_V; grounded=false; jumpsUsed=1; }
-  else if (curLevel.canDouble && jumpsUsed < 2){ vy = DJUMP_V; jumpsUsed=2; }
+  if (grounded){ vy = JUMP_V; grounded=false; jumpsUsed=1; Sound.jump(); }
+  else if (curLevel.canDouble && jumpsUsed < 2){ vy = DJUMP_V; jumpsUsed=2; Sound.double(); }
 }
 function toggleCam(){
   camMode = (camMode === 'third') ? 'first' : 'third';
@@ -887,6 +1018,7 @@ function stepPlayer(dt){
 function fail(){
   if (failing) return;
   failing = true; attempts++; updateHud();
+  Sound.fall();
   respawnAt = performance.now() + 650;
   const fl = document.getElementById('flash');
   fl.classList.add('show'); setTimeout(()=>fl.classList.remove('show'), 280);
@@ -904,6 +1036,7 @@ function clearLevel(){
   if (!save.equipped) save.equipped = lvl;     // auto-wear first armour earned
   persist();
   refreshCharacters();                          // wear it right away if it's the first
+  Sound.victory();
   showBanner('LEVEL '+lvl+' CLEARED!', '#f9e04b',
     '🛡 '+L.name+' armour earned — climb the ladder ↑');
 }
@@ -1012,28 +1145,44 @@ function buildCharScreen(){
   document.getElementById('custom-color').value = /^#[0-9a-f]{6}$/i.test(save.color) ? save.color : '#5ec8f0';
 
   // armour swatches (None + earned)
-  const as = document.getElementById('armour-swatches');
-  as.innerHTML = '';
+  populateArmourSwatches(document.getElementById('armour-swatches'), buildCharScreen);
+}
+
+// Shared armour picker (used by the Customise screen and the quick wardrobe)
+function populateArmourSwatches(container, after){
+  container.innerHTML = '';
   const none = document.createElement('div');
   none.className = 'sw none' + (save.equipped===0 ? ' sel' : '');
   none.textContent = 'None';
-  none.onclick = () => { save.equipped=0; persist(); refreshCharacters(); buildCharScreen(); };
-  as.appendChild(none);
+  none.onclick = () => { save.equipped=0; persist(); refreshCharacters(); after && after(); };
+  container.appendChild(none);
   LEVELS.forEach((L,i) => {
     if (!save.armour[i]) return;
     const d = document.createElement('div');
     d.className = 'sw' + (save.equipped===i+1 ? ' sel' : '');
     d.style.background = L.hex; d.title = L.name + ' armour';
     if (isMetal(i)) d.style.boxShadow = 'inset 0 0 8px rgba(255,255,255,0.6)';
-    d.onclick = () => { save.equipped=i+1; persist(); refreshCharacters(); buildCharScreen(); };
-    as.appendChild(d);
+    d.onclick = () => { save.equipped=i+1; persist(); refreshCharacters(); after && after(); };
+    container.appendChild(d);
   });
-  if (as.children.length === 1){
+  if (container.children.length === 1){
     const note = document.createElement('div');
     note.className = 'hint'; note.style.marginTop='6px';
     note.textContent = 'Clear levels to earn armour!';
-    as.appendChild(note);
+    container.appendChild(note);
   }
+}
+
+// ── Quick in-level wardrobe ─────────────────────────────────────────────────
+function openWardrobe(){
+  if (state !== 'play') return;
+  paused = true;
+  populateArmourSwatches(document.getElementById('wardrobe-swatches'), () => openWardrobe());
+  document.getElementById('wardrobe').classList.add('show');
+}
+function closeWardrobe(){
+  paused = false;
+  document.getElementById('wardrobe').classList.remove('show');
 }
 
 function updateHud(){
@@ -1081,6 +1230,27 @@ document.getElementById('custom-color').oninput = (e) => {
 document.getElementById('hud-cam').onclick = toggleCam;
 document.getElementById('hud-restart').onclick = () => startLevel(curLevel.level);
 document.getElementById('hud-exit').onclick = gotoSelect;
+document.getElementById('hud-wardrobe').onclick = openWardrobe;
+document.getElementById('wardrobe-done').onclick = closeWardrobe;
+
+// ── Sound toggle + start music on first interaction ─────────────────────────
+function updateSoundBtn(){
+  const b = document.getElementById('sound-btn');
+  b.textContent = save.muted ? '🔇' : '🔊';
+  b.classList.toggle('off', save.muted);
+}
+document.getElementById('sound-btn').onclick = () => {
+  save.muted = !save.muted; persist(); Sound.setMuted(save.muted); updateSoundBtn();
+  if (!save.muted) Sound.startMusic();
+};
+function firstInteraction(){
+  Sound.resume();
+  if (!save.muted) Sound.startMusic();
+  window.removeEventListener('keydown', firstInteraction);
+  window.removeEventListener('pointerdown', firstInteraction);
+}
+window.addEventListener('keydown', firstInteraction);
+window.addEventListener('pointerdown', firstInteraction);
 document.getElementById('btn-next').onclick = () => startLevel(Math.min(curLevel.level+1, TOTAL_LEVELS));
 document.getElementById('btn-replay').onclick = () => startLevel(curLevel.level);
 document.getElementById('btn-levels').onclick = gotoSelect;
@@ -1102,7 +1272,7 @@ function loop(now){
   last = now;
 
   if (state === 'play'){
-    stepPlayer(dt);
+    if (!paused) stepPlayer(dt);
     player.group.position.set(pos.x, pos.y, pos.z);
     player.group.rotation.y = yaw;
     placeCamera(false);
@@ -1129,6 +1299,7 @@ function loop(now){
 // ── boot ────────────────────────────────────────────────────────────────────
 resize();
 refreshCharacters();
+updateSoundBtn();
 gotoMenu();
 requestAnimationFrame(loop);
 </script>
